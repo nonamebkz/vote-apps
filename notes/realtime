@@ -1,0 +1,56 @@
+Task List untuk Implementasi Flow Real-time (WebSockets)
+1. Setup WebSocket di Backend
+ Install Library WebSocket:
+
+Tambahkan library Gorilla WebSocket ke dalam proyek Golang Anda.
+bash
+go get github.com/gorilla/websocket
+ Buat Endpoint untuk Upgrade ke WebSocket:
+
+Buat endpoint yang menangani upgrade koneksi HTTP ke WebSocket:
+GET /ws/{poll_id}
+Implementasikan logika untuk mengelola koneksi WebSocket.
+2. Broadcasting Voting Events
+ Logika Penyimpanan Voting:
+Modifikasi endpoint voting (POST /polls/{id}/vote) untuk menyimpan data ke database.
+ Broadcast Message setelah Voting:
+Setelah data voting disimpan, kirim pesan ke semua client yang terhubung pada channel polling tersebut:
+Format pesan bisa berisi informasi polling terkini (misal: total suara, hasil per opsi).
+ Manajemen Koneksi WebSocket:
+Implementasikan manajemen koneksi dan pemisahan sesi antara WebSocket agar dapat melayani banyak pengguna sekaligus.
+3. Frontend WebSocket Integration
+ Setup Koneksi WebSocket di ReactJS:
+Buat koneksi WebSocket pada komponen React.js saat komponen dimount:
+javascript
+const socket = new WebSocket(`ws://yourserver/ws/${pollId}`);
+ Menerima Pesan dari WebSocket:
+Buat event listener untuk mendengarkan pesan yang dikirim dari server:
+javascript
+socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    // Update state grafik dengan data baru
+};
+ Update State Grafik Secara Instan:
+Tambahkan logika untuk memperbarui state grafik (chart) dengan data yang diterima dari WebSocket.
+4. User Interface Update
+ Desain tampilan untuk menampilkan hasil voting secara real-time:
+Rancang antarmuka pengguna (UI) untuk menampilkan grafik hasil polling.
+ Tampilkan Informasi Voting Dinamis:
+Pastikan grafik diperbarui dinamis saat pesan WebSocket diterima, menunjukkan hasil terkini.
+5. Pengujian
+ Unit Testing untuk WebSocket:
+Uji konektivitas WebSocket dan pastikan pesan dikirim dan diterima dengan benar.
+ Testing Integrasi antara Backend dan Frontend:
+Uji coba sistem secara keseluruhan untuk memastikan bahwa perubahan hasil voting ditampilkan secara real-time di UI.
+ Uji Pada Beberapa Koneksi:
+Simulasikan beberapa pengguna yang memberikan suara untuk memastikan aplikasi dapat menangani banyak koneksi WebSocket.
+6. Dokumentasi
+ Perbarui Dokumentasi API:
+Tambahkan informasi mengenai endpoint WebSocket dan cara penggunaannya.
+ Pandu Pengguna tentang Fitur Real-time:
+Buat panduan untuk admin dan pengguna tentang bagaimana hasil voting ditampilkan secara real-time.
+7. Pemeliharaan dan Umpan Balik
+ Rencanakan Sesi Umpan Balik dengan Pengguna dan Admin:
+Dapatkan pendapat tentang efektivitas fitur real-time dan lakukan perbaikan jika diperlukan.
+ Perencanaan Pembaruan berdasarkan Umpan Balik:
+Kumpulkan umpan balik dan rencanakan pembaruan untuk meningkatkan fitur WebSocket, seperti pengoptimalan koneksi atau penambahan fitur baru.

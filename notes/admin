@@ -1,0 +1,45 @@
+Task List untuk Fitur Flow Admin di Aplikasi Polling
+1. Manajemen Status Poll
+ Buat Endpoints untuk Manajemen Status Poll:
+Endpoint untuk memulai polling (POST /polls/{id}/start)
+Endpoint untuk menjeda polling (POST /polls/{id}/pause)
+Endpoint untuk menghentikan polling (POST /polls/{id}/stop)
+ Implementasi Logika Untuk Menangani Status Poll:
+Perbarui status IsActive pada tabel Polls.
+Tambahkan logika untuk memastikan hanya Admin yang dapat mengubah status polling.
+2. Validasi User dengan Voter ID atau Token Unik
+ Modifikasi Endpoint untuk Menambahkan User:
+Endpoint untuk menambah user (POST /users/add) harus menghasilkan Voter ID atau Token unik.
+ Implementasi Generasi Token:
+Buat fungsi untuk menghasilkan Voter ID atau Token menggunakan UUID atau metode lain yang nyaman.
+Simpan Voter ID atau Token ke dalam tabel Users.
+ Pembaruan pada Documentasi API:
+Perbarui dokumentasi API untuk menjelaskan cara menambahkan user dengan Voter ID.
+3. Export Hasil
+ Tambahkan Fitur Ekspor Hasil:
+Endpoint untuk mendownload hasil polling dalam format PDF atau Excel (GET /polls/{id}/results/download).
+ Implementasi Logika Ekspor:
+Buat fungsi untuk mengonversi hasil polling ke dalam format yang diinginkan.
+Gunakan library untuk membuat file PDF (mis., gopdf) atau Excel (mis., excelize).
+4. Monitoring Aktivitas
+ Buat Endpoint untuk Memantau Partisipasi:
+Endpoint untuk mendapatkan statistik partisipasi user (GET /polls/{id}/participation).
+ Implementasi Logika untuk Menghitung Partisipasi:
+Hitung persentase user yang telah memberikan suara dibandingkan jumlah total user yang terdaftar untuk polling tersebut.
+ Rancang Data Statistik yang Dikirim Kembali ke Admin:
+Struktur data yang jelas untuk informasi partisipasi, misalnya jumlah user yang sudah dan belum vote.
+5. Pengujian
+ Unit Testing untuk Fitur Admin:
+Uji setiap endpoint baru dengan unit test untuk memastikan fungsi berjalan dengan baik.
+ Testing Integrasi untuk Memastikan Berfungsi Bebas dari Bug:
+Pastikan fitur baru berfungsi dengan baik dengan struktur existing.
+6. Dokumentasi
+ Perbarui Dokumentasi API:
+Tambahkan informasi baru mengenai fitur manajemen status polling, validasi user, ekspor hasil, dan monitoring aktivitas.
+ Buat Panduan Pengguna untuk Admin:
+Penjelasan langkah-langkah mengenai cara menggunakan fitur baru.
+7. Pemeliharaan dan Umpan Balik
+ Rencanakan Sesi Umpan Balik dengan Pengguna:
+Diskusikan dengan Admin tentang efektivitas fitur baru dan kebutuhan tambahan yang mungkin muncul.
+ Perencanaan Pembaruan berdasarkan Umpan Balik:
+Terapkan mode feedback loop untuk terus memperbaiki dan memperbarui aplikasi berdasarkan masukan pengguna.

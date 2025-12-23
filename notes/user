@@ -1,0 +1,52 @@
+Task List untuk Flow User dan Mekanisme QR Code
+1. QR Code Generation
+ Buat Endpoint untuk Menghasilkan QR Code:
+Endpoint untuk menghasilkan URL unik untuk voting:
+GET /generate-qr/{poll_id}
+Menghasilkan QR Code yang mengarah ke URL https://vota.app/vote/{poll_id}.
+ Implementasi Logika Generasi QR Code:
+Gunakan library seperti go-qrcode untuk menghasilkan QR Code berdasarkan URL yang dihasilkan.
+Pastikan QR Code bisa diunduh atau ditampilkan dalam format yang sesuai.
+ Penyimpanan QR Code dalam Database (opsional):
+Simpan URL dan QR Code yang dihasilkan di tabel Polls untuk referensi ulang.
+2. Flow Scanning
+ Akses Halaman Voting melalui QR Code:
+Buat endpoint untuk menangani URL voting:
+GET /vote/{poll_id}
+ Implementasi Pengarahan untuk Login:
+Periksa status login pengguna:
+Jika tidak login, arahkan ke halaman login.
+Jika login, teruskan ke voting untuk poll_id yang diberikan.
+ Redirect Otomatis setelah Login:
+Setelah login berhasil, redirect pengguna ke endpoint /vote/{poll_id} dengan cara memasukkan kembali poll_id.
+3. Anti-Double Vote Mekanisme
+ Logika Validasi Sebelum Voting:
+Sebelum tombol "Submit" diaktifkan, lakukan pengecekan pada tabel Votes untuk melihat apakah:
+UserID dan PollID sudah ada.
+ Pengaturan Tombol "Submit":
+Jika pengguna sudah memberikan suara, tombol "Submit" harus dinonaktifkan.
+Berikan notifikasi atau informasi kepada pengguna tentang status voting mereka.
+ Test Anti-Double Vote:
+Uji coba mekanisme ini untuk memastikan tidak ada pemungutan suara ganda yang diizinkan.
+4. User Interface
+ Desain Halaman Voting:
+Rancang antarmuka untuk halaman voting, termasuk QR Code scan, tombol "Submit", dan status voting.
+ Notifikasi untuk Pengguna:
+Buat mekanisme pop-up atau notifikasi jika tombol "Submit" dinonaktifkan karena telah memberikan suara.
+5. Pengujian
+ Unit Testing untuk QR Code Generation:
+Uji coba fungsi generasi QR Code untuk memastikan QR berfungsi dan mengarah ke URL yang benar.
+ Testing Integrasi untuk Flow Login dan Voting:
+Pastikan integrasi antar komponen bekerja dengan baik, dari pemindaian QR hingga voting.
+ Testing Anti-Double Vote:
+Simulasi pengguna yang sama memberikan suara pada polling yang sama untuk memastikan mekanisme berfungsi.
+6. Dokumentasi
+ Perbarui Dokumentasi API:
+Tambahkan dokumentasi tentang endpoint baru untuk generasi QR Code, voting, dan penanganan login.
+ Pandu Pengguna untuk Menggunakan QR Code:
+Buat panduan penggunaan yang jelas tentang cara menggunakan QR Code untuk voting.
+7. Pemeliharaan dan Umpan Balik
+ Rencanakan Sesi Umpan Balik dengan Pengguna:
+Diskusikan pandangan pengguna setelah implementasi fitur QR Code dan lakukan perbaikan jika diperlukan.
+ Perencanaan Pembaruan berdasarkan Umpan Balik:
+Terapkan perbaikan dan pembaruan berdasarkan masukan dari pengguna mengenai penggunaan QR Code dan voting.

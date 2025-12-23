@@ -1,0 +1,66 @@
+Task List untuk Pengembangan Aplikasi Polling
+1. Persiapan Lingkungan Pengembangan
+ Install Go (Golang) dan setup environment.
+ Pilih dan install GORM (atau library SQL pilihan Anda) untuk interaksi database.
+ Setup database pada server (MySQL, PostgreSQL, dll).
+2. Desain Arsitektur Data (Database Schema)
+Tabel Users
+
+ Buat tabel Users dengan kolom:
+ID (Primary Key, auto-increment)
+Username (String, unik, tidak boleh kosong)
+Password (String, hashed, tidak boleh kosong)
+Role (Enum: Admin/User)
+Status (Enum: Active/Inactive)
+Tabel Polls
+
+ Buat tabel Polls dengan kolom:
+ID (Primary Key, auto-increment)
+Title (String, tidak boleh kosong)
+Description (String, boleh kosong)
+CreatedBy (Foreign Key dari Users.ID)
+StartDate (Datetime)
+EndDate (Datetime)
+IsActive (Boolean)
+Tabel Options
+
+ Buat tabel Options dengan kolom:
+ID (Primary Key, auto-increment)
+PollID (Foreign Key dari Polls.ID)
+OptionText (String, tidak boleh kosong)
+Tabel Votes
+
+ Buat tabel Votes dengan kolom:
+ID (Primary Key, auto-increment)
+PollID (Foreign Key dari Polls.ID)
+OptionID (Foreign Key dari Options.ID)
+UserID (Foreign Key dari Users.ID)
+VoteTime (Datetime, untuk mencatat waktu pemungutan suara)
+3. Modeling Data di Golang
+ Buat model untuk masing-masing tabel di Golang menggunakan GORM.
+ Definisikan relasi antara Users, Polls, Options, dan Votes.
+4. Pembuatan API Endpoints
+ Buat endpoint untuk:
+Registrasi user (POST /register)
+Login user (POST /login)
+Membuat polling (POST /polls)
+Mendapatkan daftar polling (GET /polls)
+Mendapatkan detail polling (GET /polls/{id})
+Mengambil pilihan pada polling (POST /polls/{id}/vote)
+5. Logika Bisnis
+ Implementasikan logika untuk mengelola voting (satu user satu vote).
+ Validasi data input dan keluaran untuk setiap endpoint.
+6. Pengujian
+ Unit testing untuk model dan endpoint.
+ Pengujian integrasi untuk memastikan semua komponen bekerja bersama.
+7. Dokumentasi
+ Buat dokumentasi untuk API menggunakan Swagger atau Postman.
+ Dokumentasikan struktur data dan arahan penggunaan aplikasi.
+8. Deployment
+ Pilih platform untuk deployment (misal: Heroku, AWS, Digital Ocean).
+ Siapkan lingkungan produksi.
+ Deploy aplikasi ke server.
+9. Pemeliharaan dan Pembaruan
+ Rencanakan pembaruan untuk fitur tambahan berdasarkan umpan balik pengguna.
+ Implementasikan sistem pemantauan untuk uptime dan performa.
+

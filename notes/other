@@ -1,0 +1,27 @@
+Task List untuk Fitur yang Belum Ada
+1. Fitur untuk Admin
+ Manajemen Polling:
+Implementasi fitur untuk mengedit polling yang sudah ada (PUT /polls/{id}).
+Implementasi fitur untuk menghapus polling (DELETE /polls/{id}).
+ Manajemen Status Poll:
+Tambahkan kemampuan bagi Admin untuk memulai, menghentikan, dan menjeda polling jika tidak menggunakan sistem timer (POST /polls/{id}/start, /polls/{id}/pause, /polls/{id}/stop).
+ Export Hasil:
+Implementasikan fitur untuk mengunduh hasil akhir polling dalam format PDF atau Excel (GET /polls/{id}/results/download).
+ Monitoring Aktivitas:
+Fitur untuk melihat persentase user yang sudah memberikan suara dan yang belum (GET /polls/{id}/participation).
+ Validasi User:
+Implementasi fitur untuk menghasilkan ID voter unik saat menambahkan user (POST /users/add).
+2. Fitur untuk User
+ Pemberian Suara dengan QR Code:
+Implementasikan fitur pemungutan suara yang dapat diakses melalui QR Code (GET /vote/{poll_id}).
+ Feedback setelah Vote:
+Berikan notifikasi di UI setelah user berhasil memberikan suara untuk memberi tahu bahwa suara telah tercatat.
+ Riwayat Suara:
+Tambahkan fitur untuk memungkinkan user melihat riwayat suara mereka (GET /user/{id}/votes).
+ Kemudahan Akses Vote:
+Fungsionalitas untuk membagikan URL polling secara langsung kepada user melalui email atau media sosial.
+3. Fitur untuk Sistem Umum
+ Notifikasi untuk Admin:
+Implementasikan sistem notifikasi bagi Admin ketika ada user yang memberikan suara, sehingga Admin dapat menerima update langsung.
+ Audit Trail:
+Buat sistem log untuk mencatat semua tindakan penting seperti login, voting, dan perubahan status polling untuk keperluan audit.
