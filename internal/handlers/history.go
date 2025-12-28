@@ -25,13 +25,13 @@ func NewHistoryHandler(voteService *services.VoteService, pollService *services.
 
 // VoteHistoryResponse represents a vote history response
 type VoteHistoryResponse struct {
-	ID         uint      `json:"id"`
-	PollID     uint      `json:"poll_id"`
-	PollTitle  string    `json:"poll_title"`
-	OptionID   uint      `json:"option_id"`
-	OptionText string    `json:"option_text"`
-	VoteTime   time.Time `json:"vote_time"`
-	PollStatus string    `json:"poll_status"`
+	ID          uint      `json:"id"`
+	PollID      uint      `json:"poll_id"`
+	PollTitle   string    `json:"poll_title"`
+	OptionID    uint      `json:"option_id"`
+	OptionText  string    `json:"option_text"`
+	VoteTime    time.Time `json:"vote_time"`
+	PollStatus  string    `json:"poll_status"`
 	PollEndDate time.Time `json:"poll_end_date"`
 }
 
@@ -43,19 +43,16 @@ func (h *HistoryHandler) GetUserVoteHistory(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get user from context
-	_, ok := middleware.GetUserFromContext(r) // claims (unused for now)
+	claims, ok := middleware.GetUserFromContext(r)
 	if !ok {
 		WriteError(w, http.StatusUnauthorized, "USER_NOT_FOUND", "User not found in context", nil)
 		return
 	}
 
-	// Get query parameters for filtering and pagination
-	_ = GetQueryParam(r, "status")        // status filter (unused for now)
-	_ = GetQueryParam(r, "start_date")    // startDate filter (unused for now)
-	_ = GetQueryParam(r, "end_date")      // endDate filter (unused for now)
+	// Get query parameters for pagination
 	page := GetQueryParamInt(r, "page", 1)
 	limit := GetQueryParamInt(r, "limit", 10)
-	
+
 	// Validate pagination parameters
 	if page < 1 {
 		page = 1
@@ -64,17 +61,15 @@ func (h *HistoryHandler) GetUserVoteHistory(w http.ResponseWriter, r *http.Reque
 		limit = 10
 	}
 
-	// Parse date filters if provided (unused for now)
-	// var startTime, endTime *time.Time
+	// Build filter
+	filter := services.VoteHistoryFilter{
+		UserID: claims.UserID,
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	}
 
-	// Get user's vote history with details
-	// TODO: Implement GetUserVoteHistoryWithDetails method in VoteService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Vote history with details not yet implemented", nil)
-	return
-	
-	/*
-	votes, total, err := h.voteService.GetUserVoteHistoryWithDetails(claims.UserID, status, startTime, endTime, page, limit)
+	// Get user's vote history
+	votes, total, err := h.voteService.GetVoteHistory(filter)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "HISTORY_FAILED", "Failed to retrieve vote history", map[string]string{"error": err.Error()})
 		return
@@ -91,13 +86,7 @@ func (h *HistoryHandler) GetUserVoteHistory(w http.ResponseWriter, r *http.Reque
 			"total":       total,
 			"total_pages": totalPages,
 		},
-		"filters": map[string]interface{}{
-			"status":     status,
-			"start_date": startDate,
-			"end_date":   endDate,
-		},
 	}, "Vote history retrieved successfully")
-	*/
 }
 
 // GetUserVoteHistoryByUser handles getting any user's vote history (admin only)

@@ -174,31 +174,32 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
-	// TODO: Implement CreateUser method in UserService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "User creation not yet implemented", nil)
+	// Convert to service request
+	serviceReq := services.CreateUserRequest{
+		Username: req.Username,
+		Password: req.Password,
+		Role:     req.Role,
+	}
 
-	/*
-		user, err := h.userService.CreateUser(req.Username, req.Password, req.Role, claims.UserID)
-		if err != nil {
-			if err.Error() == "username already exists" {
-				WriteError(w, http.StatusConflict, "USERNAME_EXISTS", "Username already exists", nil)
-				return
-			}
-			WriteError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create user", map[string]string{"error": err.Error()})
+	// Create user
+	user, err := h.userService.CreateUser(claims.UserID, serviceReq)
+	if err != nil {
+		if err.Error() == "username already exists" {
+			WriteError(w, http.StatusConflict, "USERNAME_EXISTS", "Username already exists", nil)
 			return
 		}
+		WriteError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create user", map[string]string{"error": err.Error()})
+		return
+	}
 
-		WriteSuccess(w, map[string]interface{}{
-			"id":         user.ID,
-			"username":   user.Username,
-			"role":       user.Role,
-			"status":     user.Status,
-			"voter_id":   user.VoterID,
-			"created_at": user.CreatedAt,
-		}, "User created successfully")
-	*/
+	WriteSuccess(w, map[string]interface{}{
+		"id":         user.ID,
+		"username":   user.Username,
+		"role":       user.Role,
+		"status":     user.Status,
+		"voter_id":   user.VoterID,
+		"created_at": user.CreatedAt,
+	}, "User created successfully")
 }
 
 // UpdateUserStatus handles updating user status
@@ -247,30 +248,30 @@ func (h *AdminHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update user status
-	// TODO: Implement UpdateUserStatus method in UserService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "User status update not yet implemented", nil)
+	var user *models.User
+	if req.Status == models.UserStatusActive {
+		user, err = h.userService.ActivateUser(claims.UserID, userID)
+	} else {
+		user, err = h.userService.DeactivateUser(claims.UserID, userID)
+	}
 
-	/*
-		user, err := h.userService.UpdateUserStatus(userID, req.Status, claims.UserID)
-		if err != nil {
-			if err.Error() == "user not found" {
-				WriteError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found", nil)
-				return
-			}
-			WriteError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update user status", map[string]string{"error": err.Error()})
+	if err != nil {
+		if err.Error() == "user not found" {
+			WriteError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found", nil)
 			return
 		}
+		WriteError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update user status", map[string]string{"error": err.Error()})
+		return
+	}
 
-		WriteSuccess(w, map[string]interface{}{
-			"id":         user.ID,
-			"username":   user.Username,
-			"role":       user.Role,
-			"status":     user.Status,
-			"voter_id":   user.VoterID,
-			"updated_at": user.UpdatedAt,
-		}, "User status updated successfully")
-	*/
+	WriteSuccess(w, map[string]interface{}{
+		"id":         user.ID,
+		"username":   user.Username,
+		"role":       user.Role,
+		"status":     user.Status,
+		"voter_id":   user.VoterID,
+		"updated_at": user.UpdatedAt,
+	}, "User status updated successfully")
 }
 
 // GetParticipation handles getting participation statistics
@@ -294,10 +295,23 @@ func (h *AdminHandler) GetParticipation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Only admins can view participation statistics
+	// Check permissions: Admin always, Voter only if poll is closed
 	if claims.Role != string(models.RoleAdmin) {
-		WriteError(w, http.StatusForbidden, "ADMIN_REQUIRED", "Only admins can view participation statistics", nil)
-		return
+		// Get poll to check status
+		poll, err := h.pollService.GetPoll(pollID)
+		if err != nil {
+			if err.Error() == "poll not found" || fmt.Sprintf("%v", err) == "poll not found" {
+				WriteError(w, http.StatusNotFound, "POLL_NOT_FOUND", "Poll not found", nil)
+				return
+			}
+			WriteError(w, http.StatusInternalServerError, "POLL_LOAD_FAILED", "Failed to load poll for permission check", map[string]string{"error": err.Error()})
+			return
+		}
+
+		if poll.Status != models.PollStatusClosed {
+			WriteError(w, http.StatusForbidden, "ADMIN_REQUIRED", "Only admins can view real-time participation statistics. Results will be available to voters once the poll is closed.", nil)
+			return
+		}
 	}
 
 	// Get participation statistics using VoteService
@@ -362,19 +376,13 @@ func (h *AdminHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get dashboard statistics
-	// TODO: Implement GetDashboardStatistics method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Dashboard statistics not yet implemented", nil)
+	stats, err := h.pollService.GetDashboardStatistics()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "STATS_FAILED", "Failed to get dashboard statistics", map[string]string{"error": err.Error()})
+		return
+	}
 
-	/*
-		stats, err := h.pollService.GetDashboardStatistics()
-		if err != nil {
-			WriteError(w, http.StatusInternalServerError, "STATS_FAILED", "Failed to get dashboard statistics", map[string]string{"error": err.Error()})
-			return
-		}
-
-		WriteSuccess(w, stats, "Dashboard statistics retrieved successfully")
-	*/
+	WriteSuccess(w, stats, "Dashboard statistics retrieved successfully")
 }
 
 // ExportResults handles exporting poll results

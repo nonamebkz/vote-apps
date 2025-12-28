@@ -161,11 +161,15 @@ func setupRoutes(
 	polls.HandleFunc("/{id}/pause", pollHandler.PausePoll).Methods("POST")
 	polls.HandleFunc("/{id}/stop", pollHandler.StopPoll).Methods("POST")
 	polls.HandleFunc("/{id}/vote", voteHandler.SubmitVote).Methods("POST").Headers("Content-Type", "application/json")
+	polls.HandleFunc("/{id}/vote", voteHandler.SubmitVoteForm).Methods("POST")
 	polls.HandleFunc("/{id}/vote", voteHandler.GetVotePage).Methods("GET")
 
 	// User routes
 	users := api.PathPrefix("/users").Subrouter()
 	users.HandleFunc("/{id}/votes", voteHandler.GetUserVotes).Methods("GET")
+
+	// Results/Participation route (shared between admin and voter)
+	api.HandleFunc("/admin/polls/{id}/participation", adminHandler.GetParticipation).Methods("GET")
 
 	// Admin routes
 	admin := api.PathPrefix("/admin").Subrouter()
@@ -173,7 +177,6 @@ func setupRoutes(
 	admin.HandleFunc("/users", adminHandler.ListUsers).Methods("GET")
 	admin.HandleFunc("/users", adminHandler.CreateUser).Methods("POST").Headers("Content-Type", "application/json")
 	admin.HandleFunc("/users/{id}/status", adminHandler.UpdateUserStatus).Methods("PUT").Headers("Content-Type", "application/json")
-	admin.HandleFunc("/polls/{id}/participation", adminHandler.GetParticipation).Methods("GET")
 
 	// Export routes
 	admin.HandleFunc("/polls/{id}/export", adminHandler.ExportResults).Methods("GET")

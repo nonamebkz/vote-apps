@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
 	"polling-system/internal/models"
 	"polling-system/internal/repositories"
 	"polling-system/pkg/qr"
+
+	"gorm.io/gorm"
 )
 
 // PollService handles poll business logic
@@ -73,13 +74,15 @@ func (s *PollService) CreatePoll(creatorID uint, req CreatePollRequest) (*models
 		return nil, errors.New("only admins can create polls")
 	}
 
-	// Validate dates
 	if req.EndDate.Before(req.StartDate) {
 		return nil, errors.New("end date must be after start date")
 	}
 
-	if req.StartDate.Before(time.Now()) {
-		return nil, errors.New("start date cannot be in the past")
+	// Allow start dates from today onwards
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if req.StartDate.Before(today) {
+		return nil, errors.New("start date cannot be before today")
 	}
 
 	// Create poll
@@ -117,13 +120,13 @@ func (s *PollService) CreatePoll(creatorID uint, req CreatePollRequest) (*models
 	if s.qrService != nil {
 		qrCodeURL := s.qrService.GetQRCodeURL(poll.ID)
 		poll.QRCodeURL = qrCodeURL
-		
+
 		// Save QR code to file system
 		if _, err := s.qrService.SaveQRCode(poll.ID); err != nil {
 			// Log error but don't fail poll creation
 			fmt.Printf("Warning: failed to generate QR code for poll %d: %v\n", poll.ID, err)
 		}
-		
+
 		// Update poll with QR code URL
 		if err := s.pollRepo.Update(poll); err != nil {
 			return nil, fmt.Errorf("failed to update poll with QR code URL: %w", err)
@@ -264,9 +267,14 @@ func (s *PollService) changePollStatus(pollID, userID uint, newStatus models.Pol
 	// For starting a poll, check if it's time
 	if newStatus == models.PollStatusActive {
 		now := time.Now()
+		// If manual start is requested before the scheduled start date, update StartDate to now
 		if now.Before(poll.StartDate) {
-			return nil, errors.New("cannot start poll before start date")
+			poll.StartDate = now
+			if err := s.pollRepo.Update(poll); err != nil {
+				return nil, fmt.Errorf("failed to update poll start date for manual start: %w", err)
+			}
 		}
+
 		if now.After(poll.EndDate) {
 			return nil, errors.New("cannot start poll after end date")
 		}
@@ -433,13 +441,13 @@ func (s *PollService) GenerateQRCode(pollID uint) ([]byte, error) {
 	if s.qrService == nil {
 		return nil, errors.New("QR service not available")
 	}
-	
+
 	// Verify poll exists
 	_, err := s.pollRepo.GetByID(pollID)
 	if err != nil {
 		return nil, fmt.Errorf("poll not found: %w", err)
 	}
-	
+
 	return s.qrService.GenerateQRCode(pollID)
 }
 
@@ -448,13 +456,13 @@ func (s *PollService) GetQRCodeURL(pollID uint) (string, error) {
 	if s.qrService == nil {
 		return "", errors.New("QR service not available")
 	}
-	
+
 	// Verify poll exists
 	_, err := s.pollRepo.GetByID(pollID)
 	if err != nil {
 		return "", fmt.Errorf("poll not found: %w", err)
 	}
-	
+
 	return s.qrService.GetQRCodeURL(pollID), nil
 }
 
@@ -463,13 +471,13 @@ func (s *PollService) GetVotingURL(pollID uint) (string, error) {
 	if s.qrService == nil {
 		return "", errors.New("QR service not available")
 	}
-	
+
 	// Verify poll exists
 	_, err := s.pollRepo.GetByID(pollID)
 	if err != nil {
 		return "", fmt.Errorf("poll not found: %w", err)
 	}
-	
+
 	return s.qrService.GenerateVotingURL(pollID), nil
 }
 
@@ -478,26 +486,78 @@ func (s *PollService) RegenerateQRCode(pollID uint) error {
 	if s.qrService == nil {
 		return errors.New("QR service not available")
 	}
-	
+
 	// Verify poll exists
 	poll, err := s.pollRepo.GetByID(pollID)
 	if err != nil {
 		return fmt.Errorf("poll not found: %w", err)
 	}
-	
+
 	// Delete existing QR code if it exists
 	if err := s.qrService.DeleteQRCode(pollID); err != nil {
 		return fmt.Errorf("failed to delete existing QR code: %w", err)
 	}
-	
+
 	// Generate new QR code
 	if _, err := s.qrService.SaveQRCode(pollID); err != nil {
 		return fmt.Errorf("failed to generate new QR code: %w", err)
 	}
-	
+
 	// Update poll with new QR code URL
 	qrCodeURL := s.qrService.GetQRCodeURL(pollID)
 	poll.QRCodeURL = qrCodeURL
-	
+
 	return s.pollRepo.Update(poll)
+}
+
+// GetDashboardStatistics returns summary statistics for the admin dashboard
+func (s *PollService) GetDashboardStatistics() (map[string]interface{}, error) {
+	// Get total polls
+	totalPolls, err := s.pollRepo.CountWithFilters(nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count total polls: %w", err)
+	}
+
+	// Get active polls count
+	activeStatus := models.PollStatusActive
+	activePolls, err := s.pollRepo.CountWithFilters(&activeStatus, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count active polls: %w", err)
+	}
+
+	// Get draft polls count
+	draftStatus := models.PollStatusDraft
+	draftPolls, err := s.pollRepo.CountWithFilters(&draftStatus, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count draft polls: %w", err)
+	}
+
+	// Get closed polls count
+	closedStatus := models.PollStatusClosed
+	closedPolls, err := s.pollRepo.CountWithFilters(&closedStatus, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count closed polls: %w", err)
+	}
+
+	// Get total users from userRepo
+	totalUsers, err := s.userRepo.Count()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count total users: %w", err)
+	}
+
+	// Get voter count
+	voterRole := models.RoleVoter
+	voterCount, err := s.userRepo.CountWithFilters(&voterRole, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count voters: %w", err)
+	}
+
+	return map[string]interface{}{
+		"total_polls":  totalPolls,
+		"active_polls": activePolls,
+		"draft_polls":  draftPolls,
+		"closed_polls": closedPolls,
+		"total_users":  totalUsers,
+		"total_voters": voterCount,
+	}, nil
 }

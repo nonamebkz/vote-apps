@@ -37,9 +37,9 @@ func (s *WebSocketService) BroadcastVoteUpdate(pollID uint, voteUpdate models.Vo
 	}
 
 	s.hub.BroadcastToPoll(pollID, messageBytes)
-	log.Printf("Broadcasted vote update for poll %d: option %d now has %d votes", 
+	log.Printf("Broadcasted vote update for poll %d: option %d now has %d votes",
 		pollID, voteUpdate.OptionID, voteUpdate.VoteCount)
-	
+
 	return nil
 }
 
@@ -59,9 +59,9 @@ func (s *WebSocketService) BroadcastPollUpdate(pollID uint, pollUpdate models.Po
 	}
 
 	s.hub.BroadcastToPoll(pollID, messageBytes)
-	log.Printf("Broadcasted poll update for poll %d: status changed to %s", 
+	log.Printf("Broadcasted poll update for poll %d: status changed to %s",
 		pollID, pollUpdate.Status)
-	
+
 	return nil
 }
 
@@ -71,8 +71,8 @@ func (s *WebSocketService) BroadcastPollClosed(pollID uint, message string) erro
 		Type:   models.WSTypePollClosed,
 		PollID: pollID,
 		Data: map[string]interface{}{
-			"message":    message,
-			"closed_at":  time.Now(),
+			"message":   message,
+			"closed_at": time.Now(),
 		},
 		Timestamp: time.Now(),
 	}
@@ -85,7 +85,7 @@ func (s *WebSocketService) BroadcastPollClosed(pollID uint, message string) erro
 
 	s.hub.BroadcastToPoll(pollID, messageBytes)
 	log.Printf("Broadcasted poll closed notification for poll %d", pollID)
-	
+
 	return nil
 }
 
@@ -106,7 +106,7 @@ func (s *WebSocketService) BroadcastError(pollID uint, errorMsg models.ErrorMess
 
 	s.hub.BroadcastToPoll(pollID, messageBytes)
 	log.Printf("Broadcasted error message for poll %d: %s", pollID, errorMsg.Message)
-	
+
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (s *WebSocketService) GetConnectedClientsCount(pollID uint) int {
 // BroadcastParticipationUpdate broadcasts participation statistics updates
 func (s *WebSocketService) BroadcastParticipationUpdate(pollID uint, participationData map[string]interface{}) error {
 	message := models.WSMessage{
-		Type:      "participation_update",
+		Type:      models.WSTypeParticipationUpdate,
 		PollID:    pollID,
 		Data:      participationData,
 		Timestamp: time.Now(),
@@ -132,6 +132,6 @@ func (s *WebSocketService) BroadcastParticipationUpdate(pollID uint, participati
 
 	s.hub.BroadcastToPoll(pollID, messageBytes)
 	log.Printf("Broadcasted participation update for poll %d", pollID)
-	
+
 	return nil
 }

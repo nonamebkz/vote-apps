@@ -7,10 +7,11 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	"polling-system/internal/middleware"
 	"polling-system/internal/models"
 	"polling-system/internal/services"
+
+	"github.com/gorilla/mux"
 )
 
 // VoteHandler handles voting related requests
@@ -71,13 +72,20 @@ func (h *VoteHandler) SubmitVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to service request
+	serviceReq := services.SubmitVoteRequest{
+		PollID:   pollID,
+		OptionID: req.OptionID,
+	}
+
 	// Submit vote
-	// TODO: Implement SubmitVote method with proper signature in VoteService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Vote submission not yet implemented", nil)
-	_ = pollID // unused for now
-	_ = claims // unused for now
-	return
+	vote, err := h.voteService.SubmitVote(claims.UserID, serviceReq)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "VOTE_FAILED", "Failed to submit vote", map[string]string{"error": err.Error()})
+		return
+	}
+
+	WriteSuccess(w, vote, "Vote submitted successfully")
 }
 
 // GetVotePage handles getting the vote page (API endpoint)
@@ -102,12 +110,23 @@ func (h *VoteHandler) GetVotePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get poll details
-	// TODO: Implement GetPollWithOptions method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll details not yet implemented", nil)
-	_ = pollID // unused for now
-	_ = claims // unused for now
-	return
+	poll, err := h.pollService.GetPollWithOptions(pollID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "POLL_NOT_FOUND", "Poll not found", map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Check if user has already voted
+	hasVoted, err := h.voteService.HasUserVoted(claims.UserID, pollID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "CHECK_FAILED", "Failed to check vote status", map[string]string{"error": err.Error()})
+		return
+	}
+
+	WriteSuccess(w, map[string]interface{}{
+		"poll":      poll,
+		"has_voted": hasVoted,
+	}, "Poll details for voting retrieved successfully")
 }
 
 // VotePage handles the public vote page (via QR code) - HTML response
@@ -193,7 +212,7 @@ func (h *VoteHandler) GetUserVotes(w http.ResponseWriter, r *http.Request) {
 	// Get query parameters for pagination
 	page := GetQueryParamInt(r, "page", 1)
 	limit := GetQueryParamInt(r, "limit", 10)
-	
+
 	// Validate pagination parameters
 	if page < 1 {
 		page = 1
@@ -202,18 +221,38 @@ func (h *VoteHandler) GetUserVotes(w http.ResponseWriter, r *http.Request) {
 		limit = 10
 	}
 
+	// Build filter
+	filter := services.VoteHistoryFilter{
+		UserID: claims.UserID,
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	}
+
 	// Get user's vote history
-	// TODO: Implement GetUserVoteHistory method in VoteService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Vote history not yet implemented", nil)
-	_ = claims // unused for now
-	return
+	votes, total, err := h.voteService.GetVoteHistory(filter)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "HISTORY_FAILED", "Failed to get vote history", map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Calculate pagination info
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+
+	WriteSuccess(w, map[string]interface{}{
+		"votes": votes,
+		"pagination": map[string]interface{}{
+			"page":        page,
+			"limit":       limit,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	}, "Vote history retrieved successfully")
 }
 
 // SubmitVoteForm handles form-based vote submission (for HTML forms)
 func (h *VoteHandler) SubmitVoteForm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST method is allowed", nil)
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -250,13 +289,23 @@ func (h *VoteHandler) SubmitVoteForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Submit vote
-	// TODO: Implement SubmitVote method with proper signature in VoteService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Vote submission not yet implemented", nil)
-	_ = pollID // unused for now
-	_ = userID // unused for now
-	_ = optionID // unused for now
-	return
+	serviceReq := services.SubmitVoteRequest{
+		PollID:   pollID,
+		OptionID: uint(optionID),
+	}
+
+	_, err = h.voteService.SubmitVote(userID, serviceReq)
+	if err != nil {
+		// Log error and redirect to an error page or show error in same page
+		// For simplicity, we'll redirect back to the poll page with an error
+		errURL := fmt.Sprintf("/vote/%d?error=%s", pollID, url.QueryEscape(err.Error()))
+		http.Redirect(w, r, errURL, http.StatusFound)
+		return
+	}
+
+	// Redirect to success page
+	successURL := fmt.Sprintf("/polls/%d/results", pollID)
+	http.Redirect(w, r, successURL, http.StatusFound)
 }
 
 // VoteSuccessPage renders the vote success page
@@ -291,17 +340,17 @@ func (h *VoteHandler) getUserFromContext(r *http.Request) (uint, bool) {
 	if ok {
 		return claims.UserID, true
 	}
-	
+
 	// Fallback: check for user ID in context (for compatibility)
 	userID := r.Context().Value("user_id")
 	if userID == nil {
 		return 0, false
 	}
-	
+
 	if id, ok := userID.(uint); ok {
 		return id, true
 	}
-	
+
 	return 0, false
 }
 
@@ -310,7 +359,7 @@ func (h *VoteHandler) renderVotePage(w http.ResponseWriter, poll *models.Poll, u
 	// For now, render a simple HTML response
 	// In a full implementation, this would use proper templates
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -380,7 +429,7 @@ func (h *VoteHandler) renderVotePage(w http.ResponseWriter, poll *models.Poll, u
 // renderVotePageClosed renders the page when poll is closed
 func (h *VoteHandler) renderVotePageClosed(w http.ResponseWriter, poll *models.Poll) {
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -423,7 +472,7 @@ func (h *VoteHandler) HandleLoginRedirect(w http.ResponseWriter, r *http.Request
 
 	// Render login page with return URL
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -478,7 +527,7 @@ func (h *VoteHandler) HandleLoginRedirect(w http.ResponseWriter, r *http.Request
 // renderVotePageAlreadyVoted renders the page when user has already voted
 func (h *VoteHandler) renderVotePageAlreadyVoted(w http.ResponseWriter, poll *models.Poll) {
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -517,7 +566,7 @@ func (h *VoteHandler) renderVotePageAlreadyVoted(w http.ResponseWriter, poll *mo
 // renderVoteSuccessPage renders the vote success page
 func (h *VoteHandler) renderVoteSuccessPage(w http.ResponseWriter, poll *models.Poll) {
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>

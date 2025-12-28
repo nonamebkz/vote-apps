@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"encoding/json" // Added for UnmarshalJSON
+	"fmt"           // Added for UnmarshalJSON
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"polling-system/internal/middleware"
@@ -33,6 +36,57 @@ type CreatePollRequest struct {
 	EndDate     time.Time `json:"end_date" validate:"required"`
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for CreatePollRequest to handle multiple date formats
+func (r *CreatePollRequest) UnmarshalJSON(data []byte) error {
+	type Alias CreatePollRequest
+	aux := struct {
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	parseTime := func(s string) (time.Time, error) {
+		if s == "" {
+			return time.Time{}, nil
+		}
+		// Try RFC3339 first (standard)
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return t, nil
+		}
+		// Try "2006-01-02T15:04" (HTML datetime-local format)
+		if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+			return t, nil
+		}
+		// Try "2006-01-02 15:04"
+		if t, err := time.Parse("2006-01-02 15:04", s); err == nil {
+			return t, nil
+		}
+		// Try date only
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			return t, nil
+		}
+		return time.Time{}, fmt.Errorf("invalid time format: %s", s)
+	}
+
+	var err error
+	r.StartDate, err = parseTime(aux.StartDate)
+	if err != nil {
+		return fmt.Errorf("invalid start_date: %w", err)
+	}
+
+	r.EndDate, err = parseTime(aux.EndDate)
+	if err != nil {
+		return fmt.Errorf("invalid end_date: %w", err)
+	}
+
+	return nil
+}
+
 // UpdatePollRequest represents a poll update request
 type UpdatePollRequest struct {
 	Title       *string    `json:"title,omitempty" validate:"omitempty,min=1,max=200"`
@@ -50,10 +104,10 @@ func (h *PollHandler) ListPolls(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get query parameters for filtering and pagination
-	_ = GetQueryParam(r, "status") // status filter (unused for now)
+	statusStr := GetQueryParam(r, "status")
 	page := GetQueryParamInt(r, "page", 1)
 	limit := GetQueryParamInt(r, "limit", 10)
-	
+
 	// Validate pagination parameters
 	if page < 1 {
 		page = 1
@@ -63,31 +117,33 @@ func (h *PollHandler) ListPolls(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user from context
-	_, ok := middleware.GetUserFromContext(r) // claims (unused for now)
+	claims, ok := middleware.GetUserFromContext(r)
 	if !ok {
 		WriteError(w, http.StatusUnauthorized, "USER_NOT_FOUND", "User not found in context", nil)
 		return
 	}
 
-	// List polls based on user role
-	// TODO: Implement ListAllPolls and ListAccessiblePolls methods in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll listing not yet implemented", nil)
-	return
-	
-	/*
-	var polls []*models.Poll
-	var total int64
-	var err error
-
-	if claims.Role == string(models.RoleAdmin) {
-		// Admin can see all polls
-		polls, total, err = h.pollService.ListAllPolls(status, page, limit)
-	} else {
-		// Voters can only see active polls they can participate in
-		polls, total, err = h.pollService.ListAccessiblePolls(claims.UserID, status, page, limit)
+	// Build filter
+	filter := services.PollListFilter{
+		Limit:  limit,
+		Offset: (page - 1) * limit,
 	}
 
+	if statusStr != "" {
+		status := models.PollStatus(statusStr)
+		filter.Status = &status
+	}
+
+	// If user is voter, they can only see active polls
+	if claims.Role == string(models.RoleVoter) {
+		active := true
+		filter.IsActive = &active
+		activeStatus := models.PollStatusActive
+		filter.Status = &activeStatus
+	}
+
+	// List polls using service
+	polls, total, err := h.pollService.ListPolls(filter)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "LIST_FAILED", "Failed to list polls", map[string]string{"error": err.Error()})
 		return
@@ -105,7 +161,6 @@ func (h *PollHandler) ListPolls(w http.ResponseWriter, r *http.Request) {
 			"total_pages": totalPages,
 		},
 	}, "Polls retrieved successfully")
-	*/
 }
 
 // CreatePoll handles creating a new poll
@@ -160,21 +215,29 @@ func (h *PollHandler) CreatePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to service request
+	serviceReq := services.CreatePollRequest{
+		Title:       req.Title,
+		Description: req.Description,
+		Options:     req.Options,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
+	}
+
 	// Create poll
-	// TODO: Implement CreatePoll method with proper signature in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll creation not yet implemented", nil)
-	return
-	
-	/*
-	poll, err := h.pollService.CreatePoll(claims.UserID, req.Title, req.Description, req.Options, req.StartDate, req.EndDate)
+	poll, err := h.pollService.CreatePoll(claims.UserID, serviceReq)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create poll", map[string]string{"error": err.Error()})
+		// Differentiate between validation/business logic errors (400) and actual server errors (500)
+		status := http.StatusBadRequest
+		// Simple check for internal failures - in a larger app we might use custom error types
+		if strings.Contains(err.Error(), "database") || strings.Contains(err.Error(), "failed to update") {
+			status = http.StatusInternalServerError
+		}
+		WriteError(w, status, "CREATE_FAILED", err.Error(), nil)
 		return
 	}
 
 	WriteSuccess(w, poll, "Poll created successfully")
-	*/
 }
 
 // GetPoll handles getting a specific poll
@@ -185,24 +248,27 @@ func (h *PollHandler) GetPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract poll ID from path
-	_, err := GetPathParamUint(r, "id") // pollID (unused for now)
+	pollID, err := GetPathParamUint(r, "id")
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "INVALID_POLL_ID", "Invalid poll ID", nil)
 		return
 	}
 
-	// Get user from context
-	_, ok := middleware.GetUserFromContext(r) // claims (unused for now)
+	// Get user from context (already checked by middleware)
+	_, ok := middleware.GetUserFromContext(r)
 	if !ok {
 		WriteError(w, http.StatusUnauthorized, "USER_NOT_FOUND", "User not found in context", nil)
 		return
 	}
 
 	// Get poll with options and vote counts
-	// TODO: Implement GetPollWithDetails method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll details not yet implemented", nil)
-	return
+	poll, err := h.pollService.GetPoll(pollID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "POLL_NOT_FOUND", "Poll not found", map[string]string{"error": err.Error()})
+		return
+	}
+
+	WriteSuccess(w, poll, "Poll details retrieved successfully")
 }
 
 // UpdatePoll handles updating a poll
@@ -244,12 +310,23 @@ func (h *PollHandler) UpdatePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to service request
+	serviceReq := services.UpdatePollRequest{
+		Title:       req.Title,
+		Description: req.Description,
+		Options:     req.Options,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
+	}
+
 	// Update poll
-	// TODO: Implement UpdatePoll method with proper signature in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll update not yet implemented", nil)
-	_ = pollID // unused for now
-	return
+	poll, err := h.pollService.UpdatePoll(pollID, claims.UserID, serviceReq)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update poll", map[string]string{"error": err.Error()})
+		return
+	}
+
+	WriteSuccess(w, poll, "Poll updated successfully")
 }
 
 // DeletePoll handles deleting a poll
@@ -280,11 +357,12 @@ func (h *PollHandler) DeletePoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete poll
-	// TODO: Implement DeletePoll method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll deletion not yet implemented", nil)
-	_ = pollID // unused for now
-	return
+	if err := h.pollService.DeletePoll(pollID, claims.UserID); err != nil {
+		WriteError(w, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete poll", map[string]string{"error": err.Error()})
+		return
+	}
+
+	WriteSuccess(w, nil, "Poll deleted successfully")
 }
 
 // StartPoll handles starting a poll
@@ -315,11 +393,17 @@ func (h *PollHandler) StartPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start poll
-	// TODO: Implement StartPoll method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll start not yet implemented", nil)
-	_ = pollID // unused for now
-	return
+	poll, err := h.pollService.StartPoll(pollID, claims.UserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "database") || strings.Contains(err.Error(), "failed to update") {
+			status = http.StatusInternalServerError
+		}
+		WriteError(w, status, "START_FAILED", err.Error(), nil)
+		return
+	}
+
+	WriteSuccess(w, poll, "Poll started successfully")
 
 	// Notify WebSocket clients about poll status change
 	// TODO: Implement BroadcastPollStatusUpdate method in WebSocketService
@@ -356,11 +440,17 @@ func (h *PollHandler) PausePoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pause poll
-	// TODO: Implement PausePoll method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll pause not yet implemented", nil)
-	_ = pollID // unused for now
-	return
+	poll, err := h.pollService.PausePoll(pollID, claims.UserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "database") || strings.Contains(err.Error(), "failed to update") {
+			status = http.StatusInternalServerError
+		}
+		WriteError(w, status, "PAUSE_FAILED", err.Error(), nil)
+		return
+	}
+
+	WriteSuccess(w, poll, "Poll paused successfully")
 
 	// Notify WebSocket clients about poll status change
 	// TODO: Implement BroadcastPollStatusUpdate method in WebSocketService
@@ -397,11 +487,17 @@ func (h *PollHandler) StopPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Stop poll
-	// TODO: Implement StopPoll method in PollService
-	// For now, return a placeholder error
-	WriteError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Poll stop not yet implemented", nil)
-	_ = pollID // unused for now
-	return
+	poll, err := h.pollService.StopPoll(pollID, claims.UserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "database") || strings.Contains(err.Error(), "failed to update") {
+			status = http.StatusInternalServerError
+		}
+		WriteError(w, status, "STOP_FAILED", err.Error(), nil)
+		return
+	}
+
+	WriteSuccess(w, poll, "Poll stopped successfully")
 
 	// Notify WebSocket clients about poll status change
 	// TODO: Implement BroadcastPollStatusUpdate method in WebSocketService
